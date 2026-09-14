@@ -1,0 +1,6 @@
+{
+  "name": "DocuMind Archive",
+  "description": "AI-powered Digital Document Intelligence & Personal Archive",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

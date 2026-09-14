@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "Document": {
+      "title": "Document",
+      "description": "An archived document with OCR and AI analysis",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "fileName": { "type": "string", "maxLength": 256 },
+        "fileUrl": { "type": "string", "maxLength": 2048 },
+        "fileType": { "type": "string", "maxLength": 64 },
+        "fileSize": { "type": "number" },
+        "title": { "type": "string", "maxLength": 256 },
+        "category": { "type": "string", "maxLength": 64 },
+        "documentType": { "type": "string", "maxLength": 64 },
+        "language": { "type": "string", "maxLength": 16 },
+        "ocrText": { "type": "string", "maxLength": 100000 },
+        "shortSummary": { "type": "string", "maxLength": 2048 },
+        "detailedSummary": { "type": "string", "maxLength": 10000 },
+        "tags": { "type": "array" },
+        "extractedData": { "type": "object" },
+        "confidenceScores": { "type": "object" },
+        "documentDate": { "type": "string", "maxLength": 64 },
+        "uploadDate": { "type": "string", "maxLength": 64 },
+        "expiryDate": { "type": "string", "maxLength": 64 },
+        "processingStatus": { "type": "string", "maxLength": 64 },
+        "processingError": { "type": "string", "maxLength": 1024 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "fileName", "title", "category", "processingStatus"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "A reminder for an expiring document",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "documentId": { "type": "string", "maxLength": 128 },
+        "documentTitle": { "type": "string", "maxLength": 256 },
+        "title": { "type": "string", "maxLength": 256 },
+        "targetDate": { "type": "string", "maxLength": 64 },
+        "reminderDate": { "type": "string", "maxLength": 64 },
+        "period": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "documentId", "title", "targetDate", "status"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 256 },
+        "language": { "type": "string", "maxLength": 10 },
+        "storageUsed": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    }
+  },
+  "firestore": {
+    "/documents/{documentId}": {
+      "schema": { "$ref": "#/entities/Document" },
+      "description": "Collection of archived user documents"
+    },
+    "/reminders/{reminderId}": {
+      "schema": { "$ref": "#/entities/Reminder" },
+      "description": "Collection of user document reminders"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of user profiles"
+    }
+  }
+}
