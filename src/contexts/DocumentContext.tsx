@@ -57,13 +57,23 @@ export const DocumentProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [processingQueue, setProcessingQueue] = useState<UploadProcessingState[]>([]);
 
   const refreshData = async () => {
-    if (!userId) return;
+    if (!userId) {
+      setDocuments([]);
+      setReminders([]);
+      setSelectedDoc(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const docs = await fetchUserDocuments(userId);
-      setDocuments(docs);
+      // Ensure strict uniqueness by ID to avoid React duplicate key warnings
+      const uniqueDocs = Array.from(new Map(docs.map((d) => [d.id, d])).values());
+      setDocuments(uniqueDocs);
+
       const rems = await fetchUserReminders(userId);
-      setReminders(rems);
+      const uniqueRems = Array.from(new Map(rems.map((r) => [r.id, r])).values());
+      setReminders(uniqueRems);
     } catch (err) {
       console.error('Error refreshing document archive:', err);
     } finally {
@@ -170,7 +180,7 @@ export const DocumentProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         confidenceScores: confidenceMap,
         documentDate: aiData.documentDate || new Date().toISOString().split('T')[0],
         uploadDate: new Date().toISOString().split('T')[0],
-        expiryDate: aiData.expiryDate || undefined,
+        expiryDate: aiData.expiryDate || '',
         processingStatus: 'ready',
         isDemo: isDemoUser,
         createdAt: new Date().toISOString(),
@@ -185,9 +195,12 @@ export const DocumentProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         )
       );
 
-      // Save to Firestore
+      // Save to Firestore and state with duplicate ID filter
       await saveDocument(newDoc);
-      setDocuments((prev) => [newDoc, ...prev]);
+      setDocuments((prev) => {
+        const filtered = prev.filter((d) => d.id !== newDoc.id);
+        return [newDoc, ...filtered];
+      });
 
       return newDoc;
     } catch (error: any) {
@@ -233,7 +246,10 @@ export const DocumentProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const addReminder = async (reminder: ReminderModel) => {
     await createReminder(reminder);
-    setReminders((prev) => [reminder, ...prev]);
+    setReminders((prev) => {
+      const filtered = prev.filter((r) => r.id !== reminder.id);
+      return [reminder, ...filtered];
+    });
   };
 
   const value = {

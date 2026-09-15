@@ -268,29 +268,58 @@ export async function fetchUserDocuments(userId: string): Promise<DocumentModel[
       ...docSnap.data(),
     })) as DocumentModel[];
 
-    // Include demo documents if user archive is empty for seamless experience
-    if (docs.length === 0) {
-      return DEMO_DOCUMENTS;
-    }
+    // For authenticated real users, return strictly their Firestore documents (even if empty)
     return docs;
   } catch (error) {
-    console.warn('Firestore fetch failed, returning demo mode documents:', error);
-    return DEMO_DOCUMENTS;
+    console.warn('Firestore fetch failed for authenticated user:', error);
+    return [];
   }
+}
+
+// Sanitize data objects to strip out undefined values before saving to Firestore
+function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) {
+      continue;
+    }
+    if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      cleaned[key] = sanitizeForFirestore(value);
+    } else {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned;
 }
 
 export async function saveDocument(document: DocumentModel): Promise<void> {
   if (document.ownerId === 'demo-user' || document.isDemo) {
-    DEMO_DOCUMENTS.unshift(document);
+    const existingIdx = DEMO_DOCUMENTS.findIndex((d) => d.id === document.id);
+    if (existingIdx !== -1) {
+      DEMO_DOCUMENTS[existingIdx] = document;
+    } else {
+      DEMO_DOCUMENTS.unshift(document);
+    }
     return;
   }
 
   try {
     const docRef = doc(db, DOCS_COLLECTION, document.id);
-    await setDoc(docRef, {
+    const docToSave: Record<string, any> = {
       ...document,
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    // Firestore has a 1MB per document limit. Strip base64 fileUrl if oversized (>500KB)
+    if (typeof docToSave.fileUrl === 'string' && docToSave.fileUrl.length > 500000) {
+      delete docToSave.fileUrl;
+    }
+    if (typeof docToSave.ocrText === 'string' && docToSave.ocrText.length > 300000) {
+      docToSave.ocrText = docToSave.ocrText.substring(0, 300000) + '\n\n...[Truncated for storage]';
+    }
+
+    const sanitizedData = sanitizeForFirestore(docToSave);
+    await setDoc(docRef, sanitizedData);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${DOCS_COLLECTION}/${document.id}`);
   }
@@ -315,10 +344,20 @@ export async function updateDocumentFields(
 
   try {
     const docRef = doc(db, DOCS_COLLECTION, documentId);
-    await updateDoc(docRef, {
+    const updatesToSave: Record<string, any> = {
       ...updates,
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    if (typeof updatesToSave.fileUrl === 'string' && updatesToSave.fileUrl.length > 500000) {
+      delete updatesToSave.fileUrl;
+    }
+    if (typeof updatesToSave.ocrText === 'string' && updatesToSave.ocrText.length > 300000) {
+      updatesToSave.ocrText = updatesToSave.ocrText.substring(0, 300000) + '\n\n...[Truncated for storage]';
+    }
+
+    const sanitizedUpdates = sanitizeForFirestore(updatesToSave);
+    await updateDoc(docRef, sanitizedUpdates);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${DOCS_COLLECTION}/${documentId}`);
   }
@@ -349,7 +388,7 @@ export async function createReminder(reminder: ReminderModel): Promise<void> {
 
   try {
     const ref = doc(db, REMINDERS_COLLECTION, reminder.id);
-    await setDoc(ref, reminder);
+    await setDoc(ref, sanitizeForFirestore(reminder));
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${REMINDERS_COLLECTION}/${reminder.id}`);
   }

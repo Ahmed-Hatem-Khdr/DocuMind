@@ -34,9 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(currentUser);
         setIsDemoUser(false);
       } else {
-        // If not logged in via Firebase, fallback to initial default Demo Mode user if desired
         if (!user && !isDemoUser) {
-          // Set demo user by default so preview works smoothly
           setIsDemoUser(true);
         }
       }
@@ -51,7 +49,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       setIsDemoUser(false);
-    } catch (error) {
+    } catch (error: any) {
+      if (
+        error?.code === 'auth/popup-closed-by-user' ||
+        error?.code === 'auth/cancelled-popup-request'
+      ) {
+        console.warn('Google Sign In popup was closed by user or cancelled.');
+        return;
+      }
       console.error('Google Sign In failed:', error);
       throw error;
     }

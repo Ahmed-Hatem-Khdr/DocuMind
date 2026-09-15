@@ -11,10 +11,10 @@ const ai = new GoogleGenAI({
   },
 });
 
-// Resilient Model Cascade for High-Demand / 503 Errors
+// Resilient Candidates List using non-deprecated Gemini Flash models
 const CANDIDATE_MODELS = [
   'gemini-3.8-flash',
-  'gemini-2.5-flash',
+  'gemini-3.6-flash',
   'gemini-3.1-flash-lite',
   'gemini-flash-latest',
 ];
@@ -22,10 +22,9 @@ const CANDIDATE_MODELS = [
 async function generateWithRetryAndFallback(params: { contents: any; config?: any }) {
   let lastError: any = null;
 
-  for (const model of CANDIDATE_MODELS) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let round = 1; round <= 2; round++) {
+    for (const model of CANDIDATE_MODELS) {
       try {
-        console.log(`Calling Gemini API (model: ${model}, attempt: ${attempt})...`);
         const response = await ai.models.generateContent({
           model,
           contents: params.contents,
@@ -37,26 +36,30 @@ async function generateWithRetryAndFallback(params: { contents: any; config?: an
       } catch (err: any) {
         lastError = err;
         const errMsg = String(err?.message || err);
-        console.warn(`Attempt ${attempt} for model ${model} failed: ${errMsg}`);
 
-        const isTransient =
+        const isTransientOrUnavailable =
           errMsg.includes('503') ||
           errMsg.includes('high demand') ||
           errMsg.includes('UNAVAILABLE') ||
+          errMsg.includes('404') ||
+          errMsg.includes('NOT_FOUND') ||
           errMsg.includes('429') ||
           errMsg.includes('RESOURCE_EXHAUSTED');
 
-        if (isTransient && attempt < 3) {
-          // Exponential backoff delay: 1000ms, 2000ms
-          await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
-        } else if (!isTransient) {
-          break;
+        if (!isTransientOrUnavailable) {
+          // Throw non-transient invalid parameter errors immediately
+          throw err;
         }
+        // Fallback to next model in CANDIDATE_MODELS
       }
+    }
+    if (round < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
     }
   }
 
-  throw lastError || new Error('AI service is currently busy. Please try again in a few moments.');
+  console.error('All AI candidate models failed after retries:', lastError);
+  throw lastError || new Error('The AI service is experiencing temporary high demand. Please try again in a few moments.');
 }
 
 export async function handleProcessOCR(req: Request, res: Response) {
